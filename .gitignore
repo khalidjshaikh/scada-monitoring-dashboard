@@ -1,0 +1,26 @@
+# Build output
+backend/target/
+frontend/dist/
+backend/src/main/resources/static/
+frontend/tsconfig.tsbuildinfo
+*.class
+
+# Dependencies
+frontend/node_modules/
+node_modules/
+
+# Logs & local runtime artifacts
+*.log
+*.pid
+data/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# Local environment
+.env
+.env.local
