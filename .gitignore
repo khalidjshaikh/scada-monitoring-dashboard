@@ -13,6 +13,7 @@ node_modules/
 *.log
 *.pid
 data/
+.run/
 
 # OS / IDE
 .DS_Store

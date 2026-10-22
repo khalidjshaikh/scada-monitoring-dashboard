@@ -5,6 +5,7 @@
 #   ./run.sh            dev console  (Vite + Spring Boot, live reload for UI)
 #   ./run.sh prod       build everything, serve UI + API from one jar
 #   ./run.sh build      build frontend + backend without starting
+#   ./run.sh stop       stop sessions started by this launcher
 #   ./run.sh help
 #
 # Ports auto-select from 8082 (API) and 5173 (console) when free.
@@ -16,6 +17,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend"
+RUN_DIR="$ROOT_DIR/.run"
+SESSION_FILE="$RUN_DIR/session-$$.env"
 BACKEND_PORT="${BACKEND_PORT:-auto}"
 FRONTEND_PORT="${FRONTEND_PORT:-auto}"
 MODE="${1:-dev}"
@@ -127,6 +130,20 @@ build_backend() {
   printf '%s\n' "$hash" > "$stamp"
 }
 
+record_session() {
+  mkdir -p "$RUN_DIR"
+  {
+    printf 'MODE=%s\n' "$MODE"
+    printf 'LAUNCHER_PID=%s\n' "$$"
+    printf 'BACKEND_PID=%s\n' "${BACKEND_PID:-}"
+    printf 'BACKEND_PORT=%s\n' "${BACKEND_PORT:-auto}"
+    printf 'FRONTEND_PID=%s\n' "${FRONTEND_PID:-}"
+    printf 'FRONTEND_PORT=%s\n' "${FRONTEND_PORT:-auto}"
+    printf 'STARTED_AT=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  } > "$SESSION_FILE"
+  chmod 600 "$SESSION_FILE" 2>/dev/null || true
+}
+
 cleanup() {
   local code=$?
   trap - EXIT INT TERM
@@ -140,6 +157,8 @@ cleanup() {
     kill "$BACKEND_PID" 2>/dev/null || true
     wait "$BACKEND_PID" 2>/dev/null || true
   fi
+  rm -f "$SESSION_FILE"
+  rmdir "$RUN_DIR" 2>/dev/null || true
   exit "$code"
 }
 
@@ -186,6 +205,7 @@ run_dev() {
   info "Starting SCADA API on :$BACKEND_PORT…"
   (cd "$BACKEND_DIR" && exec java ${JAVA_OPTS:-} -jar "$jar" --server.port="$BACKEND_PORT") &
   BACKEND_PID=$!
+  record_session
   trap cleanup EXIT INT TERM
 
   if ! wait_for_backend; then
@@ -199,6 +219,7 @@ run_dev() {
       exec ./node_modules/.bin/vite --port "$FRONTEND_PORT" --strictPort --host 127.0.0.1
   ) &
   FRONTEND_PID=$!
+  record_session
 
   printf '\n'
   info "Console  →  http://localhost:${FRONTEND_PORT}"
@@ -223,6 +244,7 @@ run_prod() {
   info "Serving Meridian console and API on :$BACKEND_PORT…"
   (cd "$BACKEND_DIR" && exec java ${JAVA_OPTS:-} -jar "$jar" --server.port="$BACKEND_PORT") &
   BACKEND_PID=$!
+  record_session
   trap cleanup EXIT INT TERM
 
   if ! wait_for_backend; then
@@ -243,6 +265,12 @@ main() {
     prod)
       run_prod
       ;;
+    stop)
+      if [ -x "$ROOT_DIR/stop.sh" ]; then
+        exec "$ROOT_DIR/stop.sh"
+      fi
+      fail "stop.sh is missing or not executable"
+      ;;
     build)
       check_versions
       build_frontend
@@ -250,7 +278,7 @@ main() {
       info "Build complete. Jar: $(backend_jar)"
       ;;
     help | --help | -h)
-      sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
       ;;
     *)
       fail "Unknown mode '$MODE'. Use: dev | prod | build | help"

@@ -49,11 +49,22 @@ Pin the ports if you prefer:
 BACKEND_PORT=8090 FRONTEND_PORT=5180 ./run.sh
 ```
 
+Stop everything that was started by the launcher:
+
+```bash
+./stop.sh
+```
+
+`run.sh` records each session under `.run/`. The stop script terminates only
+verified Meridian processes (and can also find an untracked session by scanning
+this checkout). `./run.sh stop` is equivalent to `./stop.sh`.
+
 Other modes:
 
 ```bash
 ./run.sh prod    # build the UI into the jar and serve everything from one port
 ./run.sh build   # build frontend + backend only
+./run.sh stop    # stop all launcher sessions
 ./run.sh help
 ```
 
@@ -107,6 +118,7 @@ data, five stations, five tanks, twelve remote assets and a handful of alarms.
 ## Architecture
 
 ```
+run.sh / stop.sh              verified session launcher and shutdown
 frontend/                     React console (Vite dev server or built into the jar)
   src/components/             SVG charts, schematic, alarm/equipment panels
   src/hooks/useScadaFeed.ts   REST bootstrap + EventSource stream
