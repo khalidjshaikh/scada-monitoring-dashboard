@@ -35,39 +35,51 @@ export function TankPanel({ tanks, averageLevel, totalInventory }: TankPanelProp
       </div>
 
       <div className="tank-groups">
-        {[...groups.entries()].map(([siteCode, siteTanks]) => (
-          <div className="tank-group" key={siteCode}>
-            <div className="tank-group-label">
-              <span>{siteCode}</span>
-              <em>{siteTanks[0]?.siteName}</em>
-              <small>{siteTanks.length} TANKS</small>
-            </div>
-            <div className="tank-row">
-              {siteTanks.map((tank) => (
-                <div className="tank-item" key={tank.id}>
-                  <div
-                    className={classNames('tank-vessel', `level-${tank.levelState.toLowerCase()}`)}
-                    title={`${tank.name} · ${tank.product} · ${formatNumber(tank.capacityBarrels)} bbl capacity`}
-                  >
-                    <span className="tank-grid" />
-                    <span className="tank-fill" style={{ height: `${tank.levelPercent}%` }} />
-                    <span className="tank-meniscus" style={{ bottom: `${tank.levelPercent}%` }} />
-                    <span className="tank-threshold" />
-                    <span className="tank-level">
-                      {formatNumber(tank.levelPercent, 1)}
-                      <small>%</small>
-                    </span>
+        {[...groups.entries()].map(([siteCode, siteTanks]) => {
+          const groupCapacity = siteTanks.reduce((sum, tank) => sum + tank.capacityBarrels, 0)
+          const groupVolume = siteTanks.reduce((sum, tank) => sum + tank.volumeBarrels, 0)
+          const fill = groupCapacity > 0 ? (groupVolume / groupCapacity) * 100 : 0
+          return (
+            <div className="tank-group" key={siteCode}>
+              <div className="tank-group-label">
+                <span>{siteCode}</span>
+                <em>{siteTanks[0]?.siteName}</em>
+                <small>{siteTanks.length} TANKS</small>
+              </div>
+              <div className="tank-row">
+                {siteTanks.map((tank) => (
+                  <div className="tank-item" key={tank.id}>
+                    <div
+                      className={classNames('tank-vessel', `level-${tank.levelState.toLowerCase()}`)}
+                      title={`${tank.name} · ${tank.product} · ${formatNumber(tank.capacityBarrels)} bbl capacity`}
+                    >
+                      <span className="tank-grid" />
+                      <span className="tank-fill" style={{ height: `${tank.levelPercent}%` }} />
+                      <span className="tank-meniscus" style={{ bottom: `${tank.levelPercent}%` }} />
+                      <span className="tank-threshold" />
+                      <span className="tank-level">
+                        {formatNumber(tank.levelPercent, 1)}
+                        <small>%</small>
+                      </span>
+                    </div>
+                    <div className="tank-readout">
+                      <span className="tank-tag">{tank.tag}</span>
+                      <strong>{formatBarrels(tank.volumeBarrels)}</strong>
+                      <span>{formatNumber(tank.capacityBarrels / 1000, 0)}k cap</span>
+                    </div>
                   </div>
-                  <div className="tank-readout">
-                    <span className="tank-tag">{tank.tag}</span>
-                    <strong>{formatBarrels(tank.volumeBarrels)}</strong>
-                    <span>{formatNumber(tank.capacityBarrels / 1000, 0)}k cap</span>
-                  </div>
+                ))}
+              </div>
+              <div className="tank-group-summary">
+                <div className="tank-group-track">
+                  <i style={{ width: `${fill}%` }} />
                 </div>
-              ))}
+                <span><b>{formatNumber(fill, 1)}%</b> group fill</span>
+                <small>{formatBarrels(Math.max(0, groupCapacity - groupVolume))} headroom</small>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       <div className="panel-footer tank-footer">

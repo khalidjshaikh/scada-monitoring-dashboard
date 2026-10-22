@@ -7,20 +7,27 @@
 #   ./run.sh build      build frontend + backend without starting
 #   ./run.sh help
 #
-# Ports can be overridden:
-#   BACKEND_PORT=8090 FRONTEND_PORT=5174 ./run.sh
+# Ports auto-select from 8082 (API) and 5173 (console) when free.
+# Override explicitly:
+#   BACKEND_PORT=8090 FRONTEND_PORT=5180 ./run.sh
 #
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend"
-BACKEND_PORT="${BACKEND_PORT:-8082}"
-FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+BACKEND_PORT="${BACKEND_PORT:-auto}"
+FRONTEND_PORT="${FRONTEND_PORT:-auto}"
 MODE="${1:-dev}"
+case "$MODE" in
+  --dev) MODE="dev" ;;
+  --prod) MODE="prod" ;;
+  --build) MODE="build" ;;
+esac
 
 BACKEND_PID=""
 FRONTEND_PID=""
+BACKEND_JAR=""
 
 info()  { printf '\033[36m[meridian]\033[0m %s\n' "$*"; }
 warn()  { printf '\033[33m[meridian]\033[0m %s\n' "$*"; }
@@ -38,6 +45,37 @@ port_busy() {
 port_owner() {
   command -v lsof >/dev/null 2>&1 || return 0
   lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $1 " (pid " $2 ")"}'
+}
+
+find_free_port() {
+  local port="$1"
+  local end="$2"
+  while [ "$port" -le "$end" ]; do
+    if ! port_busy "$port"; then
+      printf '%s' "$port"
+      return 0
+    fi
+    port=$((port + 1))
+  done
+  return 1
+}
+
+resolve_port() {
+  local requested="$1"
+  local start="$2"
+  local end="$3"
+  local label="$4"
+  if [ "$requested" = "auto" ]; then
+    local found
+    found="$(find_free_port "$start" "$end")" ||
+      fail "No free $label port in range ${start}-${end}"
+    printf '%s' "$found"
+    return 0
+  fi
+  if port_busy "$requested"; then
+    fail "$label port $requested is in use by $(port_owner "$requested")"
+  fi
+  printf '%s' "$requested"
 }
 
 install_frontend() {
@@ -60,14 +98,33 @@ backend_jar() {
     head -n 1
 }
 
+backend_source_hash() {
+  (
+    cd "$BACKEND_DIR"
+    find pom.xml src/main/java src/main/resources \
+      -type f ! -path 'src/main/resources/static/*' -print0 |
+      xargs -0 shasum | sort | shasum | awk '{print $1}'
+  )
+}
+
 build_backend() {
   need java
+  local force="${1:-false}"
+  local existing hash stamp
+  existing="$(backend_jar)"
+  hash="$(backend_source_hash)"
+  stamp="$BACKEND_DIR/target/.backend-source-hash"
+  if [ "$force" != "true" ] && [ -n "$existing" ] && [ -f "$stamp" ] &&
+    [ "$(cat "$stamp")" = "$hash" ]; then
+    BACKEND_JAR="$existing"
+    info "Using existing service build…"
+    return 0
+  fi
   info "Compiling Spring Boot service…"
   (cd "$BACKEND_DIR" && ./mvnw -q -DskipTests package)
-  local jar
-  jar="$(backend_jar)"
-  [ -n "$jar" ] || fail "Backend jar was not produced"
-  printf '%s\n' "$jar"
+  BACKEND_JAR="$(backend_jar)"
+  [ -n "$BACKEND_JAR" ] || fail "Backend jar was not produced"
+  printf '%s\n' "$hash" > "$stamp"
 }
 
 cleanup() {
@@ -120,15 +177,11 @@ run_dev() {
   install_frontend
   need curl
 
-  if port_busy "$BACKEND_PORT"; then
-    fail "Port $BACKEND_PORT is in use by $(port_owner "$BACKEND_PORT"). Set BACKEND_PORT to another port."
-  fi
-  if port_busy "$FRONTEND_PORT"; then
-    fail "Port $FRONTEND_PORT is in use by $(port_owner "$FRONTEND_PORT"). Set FRONTEND_PORT to another port."
-  fi
-
   local jar
-  jar="$(build_backend)"
+  BACKEND_PORT="$(resolve_port "$BACKEND_PORT" 8082 8099 "Backend")"
+  FRONTEND_PORT="$(resolve_port "$FRONTEND_PORT" 5173 5199 "Console")"
+  build_backend
+  jar="$BACKEND_JAR"
 
   info "Starting SCADA API on :$BACKEND_PORT…"
   (cd "$BACKEND_DIR" && exec java ${JAVA_OPTS:-} -jar "$jar" --server.port="$BACKEND_PORT") &
@@ -161,12 +214,11 @@ run_dev() {
 
 run_prod() {
   check_versions
-  if port_busy "$BACKEND_PORT"; then
-    fail "Port $BACKEND_PORT is in use by $(port_owner "$BACKEND_PORT"). Set BACKEND_PORT to another port."
-  fi
+  BACKEND_PORT="$(resolve_port "$BACKEND_PORT" 8082 8099 "Backend")"
   build_frontend
   local jar
-  jar="$(build_backend)"
+  build_backend true
+  jar="$BACKEND_JAR"
 
   info "Serving Meridian console and API on :$BACKEND_PORT…"
   (cd "$BACKEND_DIR" && exec java ${JAVA_OPTS:-} -jar "$jar" --server.port="$BACKEND_PORT") &
@@ -194,11 +246,11 @@ main() {
     build)
       check_versions
       build_frontend
-      build_backend >/dev/null
+      build_backend true
       info "Build complete. Jar: $(backend_jar)"
       ;;
     help | --help | -h)
-      sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
       ;;
     *)
       fail "Unknown mode '$MODE'. Use: dev | prod | build | help"

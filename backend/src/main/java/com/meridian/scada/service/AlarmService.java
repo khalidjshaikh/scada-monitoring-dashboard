@@ -79,8 +79,7 @@ public class AlarmService {
             String ruleKey = "equipment:" + item.getTag() + ":fault";
             boolean faulted = item.getState() == EquipmentState.FAULT;
             sync(active, dirty, now, ruleKey, faulted, AlarmSeverity.CRITICAL,
-                    item.getTag() + " is in fault state",
-                    site, item.getSiteName(), item.getTag());
+                    item.getTag() + " is in fault state", site, item.getSiteName());
         }
 
         if (!dirty.isEmpty()) {
@@ -95,16 +94,14 @@ public class AlarmService {
                 ? AlarmSeverity.CRITICAL : AlarmSeverity.WARNING;
         sync(active, dirty, now, highKey, pressure > site.getPressureHigh(), highSeverity,
                 "Discharge pressure high: %.1f bar (limit %.1f bar)"
-                        .formatted(pressure, site.getPressureHigh()),
-                site, site.getCode(), "PT-" + site.getCode());
+                        .formatted(pressure, site.getPressureHigh()), site, site.getCode());
 
         String lowKey = "site:" + site.getCode() + ":pressure-low";
         AlarmSeverity lowSeverity = pressure <= site.getPressureLow() - 8
                 ? AlarmSeverity.CRITICAL : AlarmSeverity.WARNING;
         sync(active, dirty, now, lowKey, pressure < site.getPressureLow(), lowSeverity,
                 "Discharge pressure low: %.1f bar (limit %.1f bar)"
-                        .formatted(pressure, site.getPressureLow()),
-                site, site.getCode(), "PT-" + site.getCode());
+                        .formatted(pressure, site.getPressureLow()), site, site.getCode());
     }
 
     private void evaluateTemperature(Site site, double temperature, Map<String, Alarm> active,
@@ -114,8 +111,7 @@ public class AlarmService {
                 ? AlarmSeverity.CRITICAL : AlarmSeverity.WARNING;
         sync(active, dirty, now, key, temperature > site.getTemperatureWarning(), severity,
                 "Process temperature high: %.1f °C (limit %.1f °C)"
-                        .formatted(temperature, site.getTemperatureWarning()),
-                site, site.getCode(), "TT-" + site.getCode());
+                        .formatted(temperature, site.getTemperatureWarning()), site, site.getCode());
     }
 
     private void evaluateFlow(Site site, double flow, Map<String, Alarm> active,
@@ -125,7 +121,7 @@ public class AlarmService {
         if (ratio >= 0.35) {
             lowFlowSince.remove(key);
             sync(active, dirty, now, key, false, AlarmSeverity.WARNING,
-                    "Line flow below minimum", site, site.getCode(), "FT-" + site.getCode());
+                    "Line flow below minimum", site, site.getCode());
             return;
         }
 
@@ -136,8 +132,7 @@ public class AlarmService {
         AlarmSeverity severity = ratio < 0.15 ? AlarmSeverity.CRITICAL : AlarmSeverity.WARNING;
         sync(active, dirty, now, key, true, severity,
                 "Line flow below minimum: %.0f m³/h (minimum %.0f m³/h)"
-                        .formatted(flow, site.getNominalFlow() * 0.35),
-                site, site.getCode(), "FT-" + site.getCode());
+                        .formatted(flow, site.getNominalFlow() * 0.35), site, site.getCode());
     }
 
     private void evaluateTank(Tank tank, Site site, Map<String, Alarm> active,
@@ -147,21 +142,19 @@ public class AlarmService {
                 ? AlarmSeverity.CRITICAL : AlarmSeverity.WARNING;
         sync(active, dirty, now, lowKey, tank.getLevelPercent() < 15, lowSeverity,
                 "%s level low: %.1f%% (reserve %.0f%%)"
-                        .formatted(tank.getTag(), tank.getLevelPercent(), 15.0),
-                site, tank.getTag(), tank.getTag() + " / LIT");
+                        .formatted(tank.getTag(), tank.getLevelPercent(), 15.0), site, tank.getTag());
 
         String highKey = "tank:" + tank.getTag() + ":high";
         AlarmSeverity highSeverity = tank.getLevelPercent() > 97
                 ? AlarmSeverity.CRITICAL : AlarmSeverity.WARNING;
         sync(active, dirty, now, highKey, tank.getLevelPercent() > 92, highSeverity,
                 "%s level high: %.1f%% (limit %.0f%%)"
-                        .formatted(tank.getTag(), tank.getLevelPercent(), 92.0),
-                site, tank.getTag(), tank.getTag() + " / LIT");
+                        .formatted(tank.getTag(), tank.getLevelPercent(), 92.0), site, tank.getTag());
     }
 
     private void sync(Map<String, Alarm> active, List<Alarm> dirty, Instant now,
                       String ruleKey, boolean condition, AlarmSeverity severity,
-                      String message, Site site, String source, String sourceTag) {
+                      String message, Site site, String source) {
         Alarm existing = active.get(ruleKey);
         if (condition) {
             if (existing == null) {

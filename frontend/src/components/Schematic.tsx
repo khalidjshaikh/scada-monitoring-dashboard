@@ -114,6 +114,11 @@ export function Schematic({ sites, siteId, onSelect }: SchematicProps) {
         </div>
       </div>
 
+      <span className="schematic-swipe">
+        <Icon name="arrow" size={11} />
+        Drag the field map to explore all five stations
+      </span>
+
       <div className="panel-footer schematic-footer">
         <span>
           <Icon name="flow" size={12} />

@@ -1,6 +1,7 @@
 package com.meridian.scada.service;
 
 import com.meridian.scada.domain.Alarm;
+import com.meridian.scada.domain.AlarmSeverity;
 import com.meridian.scada.domain.AlarmStatus;
 import com.meridian.scada.domain.Equipment;
 import com.meridian.scada.domain.EquipmentState;
@@ -76,7 +77,7 @@ public class DashboardService {
             OperationalStatus temperatureStatus = temperatureStatus(site, temperature);
             OperationalStatus status = worst(worst(pressureStatus, flowStatus), temperatureStatus);
             for (Alarm alarm : siteAlarms) {
-                status = worst(status, alarm.getSeverity() == com.meridian.scada.domain.AlarmSeverity.CRITICAL
+                status = worst(status, alarm.getSeverity() == AlarmSeverity.CRITICAL
                         ? OperationalStatus.CRITICAL : OperationalStatus.WARNING);
             }
             int equipmentRunning = (int) siteEquipment.stream()
@@ -103,6 +104,7 @@ public class DashboardService {
                     site.getPressureLow(),
                     site.getPressureHigh(),
                     site.getTemperatureWarning(),
+                    site.getTemperatureCritical(),
                     status,
                     pressureStatus,
                     flowStatus,
@@ -133,7 +135,7 @@ public class DashboardService {
         double averageTankLevel = totalCapacity == 0 ? 0 : totalVolume / totalCapacity * 100.0;
         int activeCount = activeAlarms.size();
         int criticalCount = (int) activeAlarms.stream()
-                .filter(alarm -> alarm.getSeverity() == com.meridian.scada.domain.AlarmSeverity.CRITICAL)
+                .filter(alarm -> alarm.getSeverity() == AlarmSeverity.CRITICAL)
                 .count();
         int unacknowledged = (int) activeAlarms.stream()
                 .filter(alarm -> alarm.getStatus() == AlarmStatus.ACTIVE)

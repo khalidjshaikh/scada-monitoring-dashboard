@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
@@ -40,6 +41,13 @@ public class ApiExceptionHandler {
                                                      HttpServletRequest request) {
         return ResponseEntity.badRequest()
                 .body(error(HttpStatus.BAD_REQUEST, "Malformed request body", request.getRequestURI()));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiError> handleMissingResource(NoResourceFoundException exception,
+                                                          HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(error(HttpStatus.NOT_FOUND, "Resource not found", request.getRequestURI()));
     }
 
     @ExceptionHandler(Exception.class)

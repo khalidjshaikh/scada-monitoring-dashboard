@@ -114,7 +114,7 @@ export function KpiStrip({ kpis, sites, tanks, trend }: KpiStripProps) {
         delta={pressureDelta}
         note={`${sites.length} station average`}
       >
-        <Sparkline data={pressureData} color={pressureWarn ? '#f2b34b' : '#43e2c4'} />
+        <Sparkline className="kpi-sparkline" data={pressureData} color={pressureWarn ? '#f2b34b' : '#43e2c4'} />
       </KpiCard>
 
       <KpiCard
@@ -126,7 +126,7 @@ export function KpiStrip({ kpis, sites, tanks, trend }: KpiStripProps) {
         delta={flowDelta}
         note="Aggregate line flow"
       >
-        <Sparkline data={flowData} color={flowWarn ? '#f2b34b' : '#68d0f7'} />
+        <Sparkline className="kpi-sparkline" data={flowData} color={flowWarn ? '#f2b34b' : '#68d0f7'} />
       </KpiCard>
 
       <KpiCard

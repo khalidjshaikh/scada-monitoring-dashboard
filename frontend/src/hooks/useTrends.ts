@@ -41,13 +41,20 @@ export function useTrends(
   const hasSnapshot = snapshot !== null
 
   useEffect(() => {
-    const controller = new AbortController()
     let active = true
-    setTrend(null)
-    setLoading(true)
     setError(null)
 
-    fetchTrends(minutes, siteId, controller.signal)
+    if (!hasSnapshot) {
+      setLoading(true)
+      return () => {
+        active = false
+      }
+    }
+
+    setTrend(null)
+    setLoading(true)
+
+    fetchTrends(minutes, siteId)
       .then((data) => {
         if (!active) return
         setTrend(data)
@@ -61,7 +68,6 @@ export function useTrends(
 
     return () => {
       active = false
-      controller.abort()
     }
   }, [minutes, siteId, hasSnapshot])
 

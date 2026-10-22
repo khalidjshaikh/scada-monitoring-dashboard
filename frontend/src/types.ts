@@ -37,6 +37,7 @@ export interface Site {
   pressureLow: number
   pressureHigh: number
   temperatureWarning: number
+  temperatureCritical: number
   status: OperationalStatus
   pressureStatus: OperationalStatus
   flowStatus: OperationalStatus

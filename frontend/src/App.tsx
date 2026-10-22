@@ -200,7 +200,7 @@ export default function App() {
               onRequestCommand={requestCommand}
             />
 
-            <TemperaturePanel sites={snapshot.sites} />
+            <TemperaturePanel sites={snapshot.sites} trend={aggregateTrend.trend} />
           </div>
         </main>
 

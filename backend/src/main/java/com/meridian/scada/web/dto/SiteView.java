@@ -20,6 +20,7 @@ public record SiteView(
         double pressureLow,
         double pressureHigh,
         double temperatureWarning,
+        double temperatureCritical,
         OperationalStatus status,
         OperationalStatus pressureStatus,
         OperationalStatus flowStatus,

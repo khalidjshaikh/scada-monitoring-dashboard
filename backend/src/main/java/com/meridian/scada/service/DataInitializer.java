@@ -158,11 +158,19 @@ public class DataInitializer implements ApplicationRunner {
                 terminal.getCode(), terminal.getName(), "PL-12", "ops:pig-12:complete",
                 now.minus(55, ChronoUnit.MINUTES));
         info.setClearedAt(now.minus(49, ChronoUnit.MINUTES));
-        alarmRepository.saveAll(List.of(critical, warning, info));
+        Alarm proving = new Alarm(AlarmSeverity.WARNING, AlarmStatus.ACTIVE, "ALM-4473",
+                "LACT meter proving certificate expires in 6 days", terminal.getId(),
+                terminal.getCode(), terminal.getName(), "LACT-501", "ops:lact-501:proving",
+                now.minus(34, ChronoUnit.MINUTES));
+        Alarm reserve = new Alarm(AlarmSeverity.WARNING, AlarmStatus.ACTIVE, "ALM-4474",
+                "T-403 interface approaching low reserve band", tankFarm.getId(),
+                tankFarm.getCode(), tankFarm.getName(), "LIT-403", "ops:t-403:reserve",
+                now.minus(9, ChronoUnit.MINUTES));
+        alarmRepository.saveAll(List.of(critical, warning, info, proving, reserve));
 
         seedHistory(sites);
         log.info("Seeded {} stations, {} tanks, {} remote assets and {} alarms",
-                sites.size(), 5, 12, 3);
+                sites.size(), 5, 12, 5);
     }
 
     private void seedHistory(List<Site> sites) {

@@ -1,6 +1,7 @@
 package com.meridian.scada.web;
 
 import com.meridian.scada.service.EquipmentService;
+import com.meridian.scada.service.FleetState;
 import com.meridian.scada.web.dto.CommandRequest;
 import com.meridian.scada.web.dto.CommandResponse;
 import com.meridian.scada.web.dto.EquipmentView;
@@ -19,10 +20,9 @@ import java.util.List;
 public class EquipmentController {
 
     private final EquipmentService equipmentService;
-    private final com.meridian.scada.service.FleetState fleetState;
+    private final FleetState fleetState;
 
-    public EquipmentController(EquipmentService equipmentService,
-                               com.meridian.scada.service.FleetState fleetState) {
+    public EquipmentController(EquipmentService equipmentService, FleetState fleetState) {
         this.equipmentService = equipmentService;
         this.fleetState = fleetState;
     }
