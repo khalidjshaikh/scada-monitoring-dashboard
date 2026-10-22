@@ -34,14 +34,35 @@ repository includes the Maven wrapper.
 
 The launcher installs frontend dependencies if needed, compiles the service,
 and starts both processes. It auto-selects free ports starting at **8082** (API)
-and **5173** (console), then prints the URLs:
+and **5173** (console), and binds both services dual-stack on IPv6 (`::`), then
+prints the URLs:
 
 ```
-Console  →  http://localhost:5173
-API      →  http://localhost:8082/api/dashboard
-Health   →  http://localhost:8082/actuator/health
-H2       →  http://localhost:8082/h2-console
+Console  →  http://[::1]:5173
+API      →  http://[::1]:8082/api/dashboard
+Health   →  http://[::1]:8082/actuator/health
+H2       →  http://[::1]:8082/h2-console
+IPv4     →  http://127.0.0.1:5173
 ```
+
+The API and console are reachable over both IPv6 and IPv4 loopback. The Vite
+dev proxy and launcher health checks use `[::1]` when the services are bound
+dual-stack.
+
+### Binding and IPv6
+
+`BIND_HOST` controls both listeners:
+
+```bash
+./run.sh                        # dual-stack, :: (default)
+BIND_HOST=::1 ./run.sh          # IPv6 loopback only
+BIND_HOST=0.0.0.0 ./run.sh      # IPv4-only compatibility
+BIND_HOST=localhost ./run.sh    # whatever localhost resolves to
+```
+
+`run.sh` passes the address to both Tomcat (`--server.address`) and Vite
+(`--host`). The direct jar and `npm run dev` defaults also support IPv6; Vite's
+own default bind host is `::`.
 
 Pin the ports if you prefer:
 
@@ -75,6 +96,9 @@ Run the backend tests with:
 ```bash
 cd backend && ./mvnw test
 ```
+
+The suite covers alarm rule mapping, reserve bands, the REST contract, trend
+history and alarm acknowledgement (12 tests).
 
 For `prod`, the console and API share the backend port:
 `http://localhost:<BACKEND_PORT>/`.
@@ -162,5 +186,8 @@ state, not a client-side heuristic.
 - The UI is responsive down to phone widths; the schematic and equipment table
   scroll horizontally on narrow screens.
 - Motion is disabled automatically under `prefers-reduced-motion`.
-- The service binds to `--server.port` passed by `run.sh`; direct jar runs use
-  `SERVER_PORT` (default `8082`).
+- Both listeners are dual-stack IPv6 by default (`BIND_HOST=::`); use
+  `BIND_HOST=0.0.0.0` for IPv4-only hosts.
+- The service binds to `--server.port` and `--server.address` passed by
+  `run.sh`; direct jar runs use `SERVER_PORT`/Tomcat defaults (default
+  `8082`, all interfaces including IPv6 when available).

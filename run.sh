@@ -9,7 +9,11 @@
 #   ./run.sh help
 #
 # Ports auto-select from 8082 (API) and 5173 (console) when free.
-# Override explicitly:
+# Both services bind dual-stack IPv6 (::) by default. To force IPv4 only:
+#   BIND_HOST=0.0.0.0 ./run.sh
+# To bind only IPv6 loopback:
+#   BIND_HOST=::1 ./run.sh
+# Pin ports:
 #   BACKEND_PORT=8090 FRONTEND_PORT=5180 ./run.sh
 #
 set -euo pipefail
@@ -19,8 +23,11 @@ BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 RUN_DIR="$ROOT_DIR/.run"
 SESSION_FILE="$RUN_DIR/session-$$.env"
+BIND_HOST="${BIND_HOST:-::}"
 BACKEND_PORT="${BACKEND_PORT:-auto}"
 FRONTEND_PORT="${FRONTEND_PORT:-auto}"
+BACKEND_PROBE_URL=""
+BACKEND_TARGET=""
 MODE="${1:-dev}"
 case "$MODE" in
   --dev) MODE="dev" ;;
@@ -79,6 +86,44 @@ resolve_port() {
     fail "$label port $requested is in use by $(port_owner "$requested")"
   fi
   printf '%s' "$requested"
+}
+
+# Turn a bind address into a URL-safe host. Wildcard binds are probed over
+# loopback so health checks never target 0.0.0.0 / :: directly.
+endpoint_host() {
+  local host="$1"
+  case "$host" in
+    "::" | "[::]" | "::1" | "[::1]") printf '[::1]' ;;
+    0.0.0.0) printf '127.0.0.1' ;;
+    \[*\]) printf '%s' "$host" ;;
+    *:*) printf '[%s]' "$host" ;;
+    *) printf '%s' "$host" ;;
+  esac
+}
+
+display_host() {
+  local host="$1"
+  case "$host" in
+    \[*\]) printf '%s' "$host" ;;
+    *:*) printf '[%s]' "$host" ;;
+    *) printf '%s' "$host" ;;
+  esac
+}
+
+# Strip IPv6 brackets for Java/Vite bind arguments.
+bind_address() {
+  local host="$1"
+  case "$host" in
+    \[*\]) host="${host#[}"; host="${host%]}" ;;
+  esac
+  printf '%s' "$host"
+}
+
+is_dual_stack() {
+  case "$BIND_HOST" in
+    "::" | "[::]") return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 install_frontend() {
@@ -179,8 +224,9 @@ check_versions() {
 
 wait_for_backend() {
   local attempts=90
+  local probe="${BACKEND_PROBE_URL:-http://127.0.0.1:${BACKEND_PORT}}"
   for ((i = 0; i < attempts; i++)); do
-    if curl -fsS "http://127.0.0.1:${BACKEND_PORT}/actuator/health" >/dev/null 2>&1; then
+    if curl -fsS "${probe}/actuator/health" >/dev/null 2>&1; then
       return 0
     fi
     if [ -n "$BACKEND_PID" ] && ! kill -0 "$BACKEND_PID" 2>/dev/null; then
@@ -196,36 +242,44 @@ run_dev() {
   install_frontend
   need curl
 
-  local jar
+  local jar address endpoint
   BACKEND_PORT="$(resolve_port "$BACKEND_PORT" 8082 8099 "Backend")"
   FRONTEND_PORT="$(resolve_port "$FRONTEND_PORT" 5173 5199 "Console")"
+  address="$(bind_address "$BIND_HOST")"
+  endpoint="$(endpoint_host "$BIND_HOST")"
+  BACKEND_PROBE_URL="http://${endpoint}:${BACKEND_PORT}"
+  BACKEND_TARGET="${VITE_BACKEND_TARGET:-${BACKEND_PROBE_URL}}"
   build_backend
   jar="$BACKEND_JAR"
 
-  info "Starting SCADA API on :$BACKEND_PORT…"
-  (cd "$BACKEND_DIR" && exec java ${JAVA_OPTS:-} -jar "$jar" --server.port="$BACKEND_PORT") &
+  info "Starting SCADA API on $(display_host "$BIND_HOST"):${BACKEND_PORT}…"
+  (cd "$BACKEND_DIR" && exec java ${JAVA_OPTS:-} -jar "$jar" \
+    --server.port="$BACKEND_PORT" --server.address="$address") &
   BACKEND_PID=$!
   record_session
   trap cleanup EXIT INT TERM
 
   if ! wait_for_backend; then
-    fail "Backend did not become healthy. Check the log above."
+    fail "Backend did not become healthy at ${BACKEND_PROBE_URL}. Check the log above."
   fi
 
-  info "Starting React console on :$FRONTEND_PORT…"
+  info "Starting React console on $(display_host "$BIND_HOST"):${FRONTEND_PORT}…"
   (
     cd "$FRONTEND_DIR"
-    VITE_BACKEND_TARGET="http://127.0.0.1:${BACKEND_PORT}" \
-      exec ./node_modules/.bin/vite --port "$FRONTEND_PORT" --strictPort --host 127.0.0.1
+    VITE_BACKEND_TARGET="$BACKEND_TARGET" \
+      exec ./node_modules/.bin/vite --port "$FRONTEND_PORT" --strictPort --host "$address"
   ) &
   FRONTEND_PID=$!
   record_session
 
   printf '\n'
-  info "Console  →  http://localhost:${FRONTEND_PORT}"
-  info "API      →  http://localhost:${BACKEND_PORT}/api/dashboard"
-  info "Health   →  http://localhost:${BACKEND_PORT}/actuator/health"
-  info "H2       →  http://localhost:${BACKEND_PORT}/h2-console"
+  info "Console  →  http://${endpoint}:${FRONTEND_PORT}"
+  info "API      →  http://${endpoint}:${BACKEND_PORT}/api/dashboard"
+  info "Health   →  http://${endpoint}:${BACKEND_PORT}/actuator/health"
+  info "H2       →  http://${endpoint}:${BACKEND_PORT}/h2-console"
+  if is_dual_stack; then
+    info "IPv4     →  http://127.0.0.1:${FRONTEND_PORT}"
+  fi
   printf '\n'
 
   while kill -0 "$BACKEND_PID" 2>/dev/null && kill -0 "$FRONTEND_PID" 2>/dev/null; do
@@ -235,24 +289,32 @@ run_dev() {
 
 run_prod() {
   check_versions
+  local address endpoint
   BACKEND_PORT="$(resolve_port "$BACKEND_PORT" 8082 8099 "Backend")"
+  address="$(bind_address "$BIND_HOST")"
+  endpoint="$(endpoint_host "$BIND_HOST")"
+  BACKEND_PROBE_URL="http://${endpoint}:${BACKEND_PORT}"
   build_frontend
   local jar
   build_backend true
   jar="$BACKEND_JAR"
 
-  info "Serving Meridian console and API on :$BACKEND_PORT…"
-  (cd "$BACKEND_DIR" && exec java ${JAVA_OPTS:-} -jar "$jar" --server.port="$BACKEND_PORT") &
+  info "Serving Meridian console and API on $(display_host "$BIND_HOST"):${BACKEND_PORT}…"
+  (cd "$BACKEND_DIR" && exec java ${JAVA_OPTS:-} -jar "$jar" \
+    --server.port="$BACKEND_PORT" --server.address="$address") &
   BACKEND_PID=$!
   record_session
   trap cleanup EXIT INT TERM
 
   if ! wait_for_backend; then
-    fail "Backend did not become healthy. Check the log above."
+    fail "Backend did not become healthy at ${BACKEND_PROBE_URL}. Check the log above."
   fi
   printf '\n'
-  info "Console  →  http://localhost:${BACKEND_PORT}"
-  info "API      →  http://localhost:${BACKEND_PORT}/api/dashboard"
+  info "Console  →  http://${endpoint}:${BACKEND_PORT}"
+  info "API      →  http://${endpoint}:${BACKEND_PORT}/api/dashboard"
+  if is_dual_stack; then
+    info "IPv4     →  http://127.0.0.1:${BACKEND_PORT}"
+  fi
   printf '\n'
   wait "$BACKEND_PID"
 }
@@ -278,7 +340,7 @@ main() {
       info "Build complete. Jar: $(backend_jar)"
       ;;
     help | --help | -h)
-      sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,/^set -euo pipefail$/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'
       ;;
     *)
       fail "Unknown mode '$MODE'. Use: dev | prod | build | help"

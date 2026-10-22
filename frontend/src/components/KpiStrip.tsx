@@ -72,14 +72,10 @@ function KpiCard({
       </div>
       <div className="kpi-bottom">
         <div className="kpi-meta">
-          {delta !== undefined && (
+          {delta !== undefined && delta !== null && (
             <span className={classNames('kpi-delta', deltaClass)}>
-              {delta !== null && (
-                <span aria-hidden="true">{delta > 0 ? '▲' : delta < 0 ? '▼' : '•'}</span>
-              )}
-              {delta === null
-                ? 'NO BASELINE'
-                : `${delta > 0 ? '+' : ''}${delta.toFixed(2)}%`}
+              <span aria-hidden="true">{delta > 0 ? '▲' : delta < 0 ? '▼' : '•'}</span>
+              {`${delta > 0 ? '+' : ''}${delta.toFixed(2)}%`}
               <span className="kpi-delta-label">{deltaLabel ?? 'vs 5 min'}</span>
             </span>
           )}
